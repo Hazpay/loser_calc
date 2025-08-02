@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BTC Loss Simulator</title>
   <style>
     body {
       font-family: 'Courier New', monospace;
-      background: #1a2a1a; /* Темно-серый с зеленым оттенком */
+      background: #1a2a1a;
       color: #0f0;
       padding: 40px;
       max-width: 500px;
@@ -33,7 +34,7 @@
       padding: 10px;
       font-family: 'Courier New', monospace;
       font-size: 14px;
-      background: #2a3a2a; /* Мягкий темно-зеленый для элементов */
+      background: #2a3a2a;
       color: #0f0;
       border: 1px solid #0f0;
       box-sizing: border-box;
@@ -76,14 +77,13 @@
       text-shadow: 0 0 5px #f00;
     }
 
-    /* Matrix digital rain effect */
     canvas {
       position: fixed;
       top: 0;
       left: 0;
       z-index: -1;
-      opacity: 0.3; /* Уменьшенная прозрачность */
-      filter: blur(1px); /* Легкое размытие для смягчения */
+      opacity: 0.3;
+      filter: blur(1px);
     }
   </style>
 </head>
@@ -91,13 +91,30 @@
   <canvas id="matrix"></canvas>
   <h2>₿ BTC Loss Simulator</h2>
   <label for="date">Investment Date:</label>
-  <input type="date" id="date" value="2010-07-01" min="2009-01-03" max="2025-08-02" />
+  <input type="date" id="date" value="2010-07-17" min="2009-01-03" />
   <label for="amount">Investment Amount ($):</label>
   <input type="number" id="amount" value="1000" min="10" step="10" />
   <button onclick="calculate()">Execute</button>
   <div id="result">> Results will appear here...</div>
 
   <script>
+    // Set max date to today via API
+    async function setMaxDate() {
+      try {
+        const res = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
+        if (!res.ok) throw new Error('Failed to fetch current date');
+        const data = await res.json();
+        const today = data.datetime.split('T')[0];
+        document.getElementById('date').setAttribute('max', today);
+      } catch (err) {
+        console.error('Date API error:', err);
+        // Fallback to current date if API fails
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').setAttribute('max', today);
+      }
+    }
+    setMaxDate();
+
     // Matrix digital rain effect
     const canvas = document.getElementById('matrix');
     const ctx = canvas.getContext('2d');
@@ -109,7 +126,7 @@
     const drops = Array(Math.floor(columns)).fill(1);
 
     function draw() {
-      ctx.fillStyle = 'rgba(26, 42, 26, 0.05)'; /* Подстраиваем под новый фон */
+      ctx.fillStyle = 'rgba(26, 42, 26, 0.05)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#0f0';
       ctx.font = fontSize + 'px monospace';
@@ -117,12 +134,12 @@
       for (let i = 0; i < drops.length; i++) {
         const text = chars.charAt(Math.floor(Math.random() * chars.length));
         ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.99) /* Реже обновляем */
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.99)
           drops[i] = 0;
         drops[i]++;
       }
     }
-    setInterval(draw, 50); /* Замедляем анимацию */
+    setInterval(draw, 50);
 
     async function calculate() {
       const dateInput = document.getElementById("date").value;
