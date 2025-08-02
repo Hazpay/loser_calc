@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC Loss Simulator</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a2a1a;
+      color: #0f0;
+      padding: 40px;
+      max-width: 500px;
+      margin: auto;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    h2 {
+      font-size: 24px;
+      text-transform: uppercase;
+      text-shadow: 0 0 8px #0f0;
+      margin-bottom: 30px;
+    }
+
+    label {
+      display: block;
+      margin: 20px 0 10px;
+      font-size: 14px;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      background: #2a3a2a;
+      color: #0f0;
+      border: 1px solid #0f0;
+      box-sizing: border-box;
+      box-shadow: 0 0 5px #0f0;
+    }
+
+    button {
+      background: #0f0;
+      color: #000;
+      border: none;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      background: #0a0;
+      box-shadow: 0 0 10px #0f0;
+    }
+
+    #result {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid #0f0;
+      border-radius: 0;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .highlight {
+      font-weight: bold;
+      color: #0ff;
+      text-shadow: 0 0 5px #0ff;
+    }
+
+    .loss {
+      color: #f00;
+      text-shadow: 0 0 5px #f00;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      opacity: 0.3;
+      filter: blur(1px);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrix"></canvas>
+  <h2>₿ BTC_Loser_Simulator</h2>
+  <label for="date">Investment Date:</label>
+  <input type="date" id="date" value="2010-07-17" min="2010-07-17" />
+  <label for="amount">Investment Amount ($):</label>
+  <input type="number" id="amount" value="1000" min="10" step="10" />
+  <button onclick="calculate()">Execute</button>
+  <div id="result">> Results will appear here...</div>
+
+  <script>
+    // Set max date to today via API
+    async function setMaxDate() {
+      try {
+        const res = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
+        if (!res.ok) throw new Error('Failed to fetch current date');
+        const data = await res.json();
+        const today = data.datetime.split('T')[0];
+        document.getElementById('date').setAttribute('max', today);
+      } catch (err) {
+        console.error('Date API error:', err);
+        // Fallback to current date if API fails
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').setAttribute('max', today);
+      }
+    }
+    setMaxDate();
+
+    // Matrix digital rain effect
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+    const chars = '01₿$';
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops = Array(Math.floor(columns)).fill(1);
+
+    function draw() {
+      ctx.fillStyle = 'rgba(26, 42, 26, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0f0';
+      ctx.font = fontSize + 'px monospace';
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = chars.charAt(Math.floor(Math.random() * chars.length));
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.99)
+          drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    setInterval(draw, 50);
+
+    async function calculate() {
+      const dateInput = document.getElementById("date").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+      
+      if (!dateInput || !amount || amount < 10) {
+        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Invalid date or amount (min $10).</span>`;
+        return;
+      }
+
+      const date = new Date(dateInput);
+      const timestamp = Math.floor(date.getTime() / 1000);
+
+      document.getElementById("result").innerText = "> Processing...";
+
+      try {
+        const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${timestamp}`);
+        
+        if (!res.ok) {
+          if (res.status === 429) {
+            document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Rate limit exceeded. Retry later.</span>`;
+            return;
+          }
+          throw new Error(`HTTP error: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const priceThen = data?.BTC?.USD;
+
+        if (!priceThen) {
+          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] No data for ${dateInput}. Try after July 1, 2010.</span>`;
+          return;
+        }
+
+        const btcBought = amount / priceThen;
+
+        const nowRes = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD`);
+        if (!nowRes.ok) {
+          throw new Error(`HTTP error fetching current price: ${nowRes.status}`);
+        }
+
+        const nowData = await nowRes.json();
+        const nowPrice = nowData?.USD;
+
+        if (!nowPrice) {
+          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Failed to fetch current price.</span>`;
+          return;
+        }
+
+        const nowValue = btcBought * nowPrice;
+        const gain = nowValue - amount;
+
+        document.getElementById("result").innerHTML = `
+          > [PAST] 1 BTC = <span class="highlight">$${priceThen.toFixed(2)}</span><br>
+          > [BOUGHT] <span class="highlight">${btcBought.toFixed(6)} BTC</span><br>
+          > [NOW] Value = <span class="highlight">$${nowValue.toFixed(2)}</span><br><br>
+          > [${gain > 0 ? 'PROFIT' : 'LOSS'}] <span class="${gain > 0 ? 'highlight' : 'loss'}">
+            ${gain > 0 ? `+$${gain.toFixed(2)}` : `-$${Math.abs(gain).toFixed(2)}`}
+          </span>
+        `;
+      } catch (err) {
+        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] ${err.message}. Check connection or retry.</span>`;
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
