@@ -1,116 +1,213 @@
-<!DOCTYPE html>
-<html lang="ru">
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>BTC Симулятор: Потерянная выгода</title>
+  <title>BTC Loss Simulator</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f3f3f3;
+      font-family: 'Courier New', monospace;
+      background: #1a2a1a; /* Темно-серый с зеленым оттенком */
+      color: #0f0;
       padding: 40px;
       max-width: 500px;
       margin: auto;
-    }
-    h2 {
       text-align: center;
+      overflow: hidden;
+    }
+
+    h2 {
+      font-size: 24px;
+      text-transform: uppercase;
+      text-shadow: 0 0 8px #0f0;
       margin-bottom: 30px;
     }
+
     label {
       display: block;
       margin: 20px 0 10px;
-      font-weight: bold;
+      font-size: 14px;
     }
+
     input, button {
       width: 100%;
       padding: 10px;
-      font-size: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      background: #2a3a2a; /* Мягкий темно-зеленый для элементов */
+      color: #0f0;
+      border: 1px solid #0f0;
       box-sizing: border-box;
+      box-shadow: 0 0 5px #0f0;
     }
+
     button {
-      background-color: #007bff;
-      color: white;
+      background: #0f0;
+      color: #000;
       border: none;
-      margin-top: 20px;
       cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.3s;
     }
+
     button:hover {
-      background-color: #0056b3;
+      background: #0a0;
+      box-shadow: 0 0 10px #0f0;
     }
+
     #result {
       margin-top: 30px;
       padding: 20px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid #0f0;
+      border-radius: 0;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.5;
     }
+
     .highlight {
-      font-size: 18px;
       font-weight: bold;
-      color: #1a8917;
+      color: #0ff;
+      text-shadow: 0 0 5px #0ff;
     }
+
     .loss {
-      color: #d00;
+      color: #f00;
+      text-shadow: 0 0 5px #f00;
+    }
+
+    /* Matrix digital rain effect */
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      opacity: 0.3; /* Уменьшенная прозрачность */
+      filter: blur(1px); /* Легкое размытие для смягчения */
     }
   </style>
 </head>
 <body>
-  <h2>💸 BTC Симулятор Потерь</h2>
-  <label for="date">Дата вложения:</label>
+  <canvas id="matrix"></canvas>
+  <h2>₿ BTC Loss Simulator</h2>
+  <label for="date">Investment Date:</label>
   <input type="date" id="date" value="2010-07-01" min="2009-01-03" max="2025-08-02" />
-  <label for="amount">Сумма вложения ($):</label>
+  <label for="amount">Investment Amount ($):</label>
   <input type="number" id="amount" value="1000" min="10" step="10" />
-  <button onclick="calculate()">Рассчитать</button>
-  <div id="result">📊 Результаты появятся здесь...</div>
+  <button onclick="calculate()">Execute</button>
+  <div id="result">> Results will appear here...</div>
 
   <script>
+    // Matrix digital rain effect
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+    const chars = '01₿$';
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops = Array(Math.floor(columns)).fill(1);
+
+    function draw() {
+      ctx.fillStyle = 'rgba(26, 42, 26, 0.05)'; /* Подстраиваем под новый фон */
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0f0';
+      ctx.font = fontSize + 'px monospace';
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = chars.charAt(Math.floor(Math.random() * chars.length));
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.99) /* Реже обновляем */
+          drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    setInterval(draw, 50); /* Замедляем анимацию */
+
     async function calculate() {
       const dateInput = document.getElementById("date").value;
       const amount = parseFloat(document.getElementById("amount").value);
       
       if (!dateInput || !amount || amount < 10) {
-        document.getElementById("result").innerHTML = `<b class="loss">❌ Введите корректную дату и сумму (не менее 10$).</b>`;
+        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Invalid date or amount (min $10).</span>`;
         return;
       }
 
-      // Преобразование даты в timestamp (секунды)
       const date = new Date(dateInput);
       const timestamp = Math.floor(date.getTime() / 1000);
 
-      document.getElementById("result").innerText = "⏳ Загружается...";
+      document.getElementById("result").innerText = "> Processing...";
 
       try {
-        // Запрос исторической цены Bitcoin
         const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${timestamp}`);
         
         if (!res.ok) {
           if (res.status === 429) {
-            document.getElementById("result").innerHTML = `<b class="loss">❌ Превышен лимит запросов. Попробуйте позже.</b>`;
+            document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Rate limit exceeded. Retry later.</span>`;
             return;
           }
-          throw new Error(`HTTP ошибка: ${res.status}`);
+          throw new Error(`HTTP error: ${res.status}`);
         }
 
         const data = await res.json();
         const priceThen = data?.BTC?.USD;
 
         if (!priceThen) {
-          document.getElementById("result").innerHTML = `<b class="loss">❌ Нет данных за дату ${dateInput}. Попробуйте дату после 1 июля 2010 года.</b>`;
+          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] No data for ${dateInput}. Try after July 1, 2010.</span>`;
           return;
         }
 
         const btcBought = amount / priceThen;
 
-        // Запрос текущей цены Bitcoin
         const nowRes = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD`);
         if (!nowRes.ok) {
-          throw new Error(`HTTP ошибка при получении текущей цены: ${nowRes.status}`);
+          throw new Error(`HTTP error fetching current price: ${nowRes.status}`);
         }
 
         const nowData = await nowRes.json();
         const nowPrice = nowData?.USD;
 
         if (!nowPrice) {
-          document.getElementById("result").innerHTML = `<b class="loss">❌ Ошибка получения текущей цены.</b>`;
+          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Failed to fetch current price.</span>`;
           return;
         }
 
@@ -118,15 +215,15 @@
         const gain = nowValue - amount;
 
         document.getElementById("result").innerHTML = `
-          💰 Тогда: 1 BTC стоил <b>$${priceThen.toFixed(2)}</b><br>
-          🪙 Ты бы купил: <b>${btcBought.toFixed(6)} BTC</b><br>
-          📈 Сегодня эти BTC стоят: <span class="highlight">$${nowValue.toFixed(2)}</span><br><br>
-          <span class="${gain > 0 ? 'highlight' : 'loss'}">
-            ${gain > 0 ? `🚀 Потенциальная прибыль: +$${gain.toFixed(2)}` : `📉 Убыток: -$${Math.abs(gain).toFixed(2)}`}
+          > [PAST] 1 BTC = <span class="highlight">$${priceThen.toFixed(2)}</span><br>
+          > [BOUGHT] <span class="highlight">${btcBought.toFixed(6)} BTC</span><br>
+          > [NOW] Value = <span class="highlight">$${nowValue.toFixed(2)}</span><br><br>
+          > [${gain > 0 ? 'PROFIT' : 'LOSS'}] <span class="${gain > 0 ? 'highlight' : 'loss'}">
+            ${gain > 0 ? `+$${gain.toFixed(2)}` : `-$${Math.abs(gain).toFixed(2)}`}
           </span>
         `;
       } catch (err) {
-        document.getElementById("result").innerHTML = `<b class="loss">❌ Ошибка: ${err.message}. Проверьте соединение или попробуйте позже.</b>`;
+        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] ${err.message}. Check connection or retry.</span>`;
         console.error(err);
       }
     }
