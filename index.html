@@ -1,0 +1,174 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>BTC Симулятор: Потерянная выгода</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f3f3;
+      padding: 40px;
+      max-width: 500px;
+      margin: auto;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    label {
+      display: block;
+      margin: 20px 0 10px;
+      font-weight: bold;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #result {
+      margin-top: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .highlight {
+      font-size: 18px;
+      font-weight: bold;
+      color: #1a8917;
+    }
+    .loss {
+      color: #d00;
+    }
+  </style>
+</head>
+<body>
+  <h2>💸 BTC Симулятор Потерь</h2>
+  <label for="date">Дата вложения:</label>
+  <input type="date" id="date" value="2016-05-06" min="2016-05-06" max="2025-08-02" />
+  <label for="amount">Сумма вложения ($):</label>
+  <input type="number" id="amount" value="1000" min="10" step="10" />
+  <button onclick="calculate()">Рассчитать</button>
+  <div id="result">📊 Результаты появятся здесь...</div>
+
+  <script>
+    async function calculate() {
+      const dateInput = document.getElementById("date").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+      
+      if (!dateInput || !amount || amount < 10) {
+        document.getElementById("result").innerHTML = `<b class="loss">❌ Введите корректную дату и сумму (не менее 10$).</b>`;
+        return;
+      }
+
+      // Преобразование даты в timestamp (секунды)
+      const date = new Date(dateInput);
+      const timestamp = Math.floor(date.getTime() / 1000);
+
+      document.getElementById("result").innerText = "⏳ Загружается...";
+
+      try {
+        // Запрос исторической цены Bitcoin
+        const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${timestamp}`);
+        
+        if (!res.ok) {
+          if (res.status === 429) {
+            document.getElementById("result").innerHTML = `<b class="loss">❌ Превышен лимит запросов. Попробуйте позже.</b>`;
+            return;
+          }
+          throw new Error(`HTTP ошибка: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const priceThen = data?.BTC?.USD;
+
+        if (!priceThen) {
+          document.getElementById("result").innerHTML = `<b class="loss">❌ Нет данных за дату ${dateInput}. Попробуйте другую дату.</b>`;
+          return;
+        }
+
+        const btcBought = amount / priceThen;
+
+        // Запрос текущей цены Bitcoin
+        const nowRes = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD`);
+        if (!nowRes.ok) {
+          throw new Error(`HTTP ошибка при получении текущей цены: ${res.status}`);
+        }
+
+        const nowData = await nowRes.json();
+        const nowPrice = nowData?.USD;
+
+        if (!nowPrice) {
+          document.getElementById("result").innerHTML = `<b class="loss">❌ Ошибка получения текущей цены.</b>`;
+          return;
+        }
+
+        const nowValue = btcBought * nowPrice;
+        const gain = nowValue - amount;
+
+        document.getElementById("result").innerHTML = `
+          💰 Тогда: 1 BTC стоил <b>$${priceThen.toFixed(2)}</b><br>
+          🪙 Ты бы купил: <b>${btcBought.toFixed(6)} BTC</b><br>
+          📈 Сегодня эти BTC стоят: <span class="highlight">$${nowValue.toFixed(2)}</span><br><br>
+          <span class="${gain > 0 ? 'highlight' : 'loss'}">
+            ${gain > 0 ? `🚀 Потенциальная прибыль: +$${gain.toFixed(2)}` : `📉 Убыток: -$${Math.abs(gain).toFixed(2)}`}
+          </span>
+        `;
+      } catch (err) {
+        document.getElementById("result").innerHTML = `<b class="loss">❌ Ошибка: ${err.message}. Проверьте соединение или попробуйте позже.</b>`;
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
