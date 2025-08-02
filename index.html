@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BTC Loss Simulator</title>
   <style>
     body {
@@ -60,7 +60,6 @@
       padding: 20px;
       background: rgba(0, 255, 0, 0.1);
       border: 1px solid #0f0;
-      border-radius: 0;
       text-align: left;
       font-size: 14px;
       line-height: 1.5;
@@ -90,32 +89,33 @@
 <body>
   <canvas id="matrix"></canvas>
   <h2>₿ BTC_Loser_Simulator</h2>
+
   <label for="date">Investment Date:</label>
   <input type="date" id="date" value="2010-07-17" min="2010-07-17" />
+
   <label for="amount">Investment Amount ($):</label>
   <input type="number" id="amount" value="1000" min="10" step="10" />
+
+  <label><input type="checkbox" id="dcaMode" /> Monthly Investment Mode (DCA)</label>
+
   <button onclick="calculate()">Execute</button>
+
   <div id="result">> Results will appear here...</div>
 
   <script>
-    // Set max date to today via API
     async function setMaxDate() {
       try {
-        const res = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
-        if (!res.ok) throw new Error('Failed to fetch current date');
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
         const data = await res.json();
         const today = data.datetime.split('T')[0];
         document.getElementById('date').setAttribute('max', today);
-      } catch (err) {
-        console.error('Date API error:', err);
-        // Fallback to current date if API fails
+      } catch {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('date').setAttribute('max', today);
       }
     }
     setMaxDate();
 
-    // Matrix digital rain effect
     const canvas = document.getElementById('matrix');
     const ctx = canvas.getContext('2d');
     canvas.height = window.innerHeight;
@@ -124,13 +124,11 @@
     const fontSize = 14;
     const columns = canvas.width / fontSize;
     const drops = Array(Math.floor(columns)).fill(1);
-
     function draw() {
       ctx.fillStyle = 'rgba(26, 42, 26, 0.05)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#0f0';
       ctx.font = fontSize + 'px monospace';
-
       for (let i = 0; i < drops.length; i++) {
         const text = chars.charAt(Math.floor(Math.random() * chars.length));
         ctx.fillText(text, i * fontSize, drops[i] * fontSize);
@@ -141,68 +139,95 @@
     }
     setInterval(draw, 50);
 
+    async function calculateDCA(startDate, monthlyAmount) {
+      const now = new Date();
+      const current = new Date(startDate);
+      const btcAmounts = [];
+
+      while (current <= now) {
+        const ts = Math.floor(current.getTime() / 1000);
+        try {
+          const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${ts}`);
+          const data = await res.json();
+          const price = data?.BTC?.USD;
+          if (price > 0) {
+            btcAmounts.push(monthlyAmount / price);
+          }
+        } catch {}
+        current.setMonth(current.getMonth() + 1);
+      }
+
+      const totalBTC = btcAmounts.reduce((sum, val) => sum + val, 0);
+      const invested = btcAmounts.length * monthlyAmount;
+
+      const nowRes = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD`);
+      const nowData = await nowRes.json();
+      const nowPrice = nowData?.USD;
+
+      const nowValue = totalBTC * nowPrice;
+      const gain = nowValue - invested;
+
+      return { months: btcAmounts.length, invested, totalBTC, nowValue, gain };
+    }
+
     async function calculate() {
       const dateInput = document.getElementById("date").value;
       const amount = parseFloat(document.getElementById("amount").value);
-      
-      if (!dateInput || !amount || amount < 10) {
+      const dcaMode = document.getElementById("dcaMode").checked;
+
+      if (!dateInput || isNaN(amount) || amount < 10) {
         document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Invalid date or amount (min $10).</span>`;
         return;
       }
 
-      const date = new Date(dateInput);
-      const timestamp = Math.floor(date.getTime() / 1000);
-
       document.getElementById("result").innerText = "> Processing...";
 
-      try {
-        const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${timestamp}`);
-        
-        if (!res.ok) {
-          if (res.status === 429) {
-            document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Rate limit exceeded. Retry later.</span>`;
-            return;
-          }
-          throw new Error(`HTTP error: ${res.status}`);
+      if (dcaMode) {
+        try {
+          const dca = await calculateDCA(dateInput, amount);
+          document.getElementById("result").innerHTML = `
+            > [DCA MODE] <span class="highlight">${dca.months}</span> monthly investments of <span class="highlight">$${amount}</span><br>
+            > [INVESTED] <span class="highlight">$${dca.invested.toFixed(2)}</span><br>
+            > [BTC ACQUIRED] <span class="highlight">${dca.totalBTC.toFixed(6)} BTC</span><br>
+            > [NOW] Value = <span class="highlight">$${dca.nowValue.toFixed(2)}</span><br><br>
+            > [${dca.gain >= 0 ? 'PROFIT' : 'LOSS'}] <span class="${dca.gain >= 0 ? 'highlight' : 'loss'}">
+              ${dca.gain >= 0 ? `+$${dca.gain.toFixed(2)}` : `-$${Math.abs(dca.gain).toFixed(2)}`}
+            </span>
+          `;
+        } catch (err) {
+          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] ${err.message}</span>`;
         }
+        return;
+      }
 
+      try {
+        const date = new Date(dateInput);
+        const ts = Math.floor(date.getTime() / 1000);
+        const res = await fetch(`https://min-api.cryptocompare.com/data/pricehistorical?fsym=BTC&tsyms=USD&ts=${ts}`);
         const data = await res.json();
         const priceThen = data?.BTC?.USD;
+        if (!priceThen) throw new Error("Invalid historical price");
 
-        if (!priceThen) {
-          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] No data for ${dateInput}. Try after July 1, 2010.</span>`;
-          return;
-        }
-
-        const btcBought = amount / priceThen;
+        const btc = amount / priceThen;
 
         const nowRes = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD`);
-        if (!nowRes.ok) {
-          throw new Error(`HTTP error fetching current price: ${nowRes.status}`);
-        }
-
         const nowData = await nowRes.json();
         const nowPrice = nowData?.USD;
+        if (!nowPrice) throw new Error("Invalid current price");
 
-        if (!nowPrice) {
-          document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] Failed to fetch current price.</span>`;
-          return;
-        }
-
-        const nowValue = btcBought * nowPrice;
+        const nowValue = btc * nowPrice;
         const gain = nowValue - amount;
 
         document.getElementById("result").innerHTML = `
           > [PAST] 1 BTC = <span class="highlight">$${priceThen.toFixed(2)}</span><br>
-          > [BOUGHT] <span class="highlight">${btcBought.toFixed(6)} BTC</span><br>
+          > [BOUGHT] <span class="highlight">${btc.toFixed(6)} BTC</span><br>
           > [NOW] Value = <span class="highlight">$${nowValue.toFixed(2)}</span><br><br>
-          > [${gain > 0 ? 'PROFIT' : 'LOSS'}] <span class="${gain > 0 ? 'highlight' : 'loss'}">
-            ${gain > 0 ? `+$${gain.toFixed(2)}` : `-$${Math.abs(gain).toFixed(2)}`}
+          > [${gain >= 0 ? 'PROFIT' : 'LOSS'}] <span class="${gain >= 0 ? 'highlight' : 'loss'}">
+            ${gain >= 0 ? `+$${gain.toFixed(2)}` : `-$${Math.abs(gain).toFixed(2)}`}
           </span>
         `;
       } catch (err) {
-        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] ${err.message}. Check connection or retry.</span>`;
-        console.error(err);
+        document.getElementById("result").innerHTML = `<span class="loss">> [ERROR] ${err.message}</span>`;
       }
     }
   </script>
