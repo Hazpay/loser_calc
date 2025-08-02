@@ -1,2 +1,23 @@
-# loser_calc
-choose the date and amount of investments in bitcoin that you did not make because you are stupid and do not know how to invest, and find out how much you lost
+# BTC DCA Telegram Bot
+
+🤖 Бот рассчитывает, сколько вы бы заработали, если бы инвестировали каждый месяц в BTC, начиная с указанной даты.
+
+## 📦 Команды
+
+```
+/simulate 2016-05 100
+```
+
+## 🚀 Деплой на Render
+
+1. Создай Web Service
+2. Задай переменную окружения `BOT_TOKEN`
+3. Команда запуска:
+```
+python bot.py
+```
+
+## 🔗 Источник данных
+
+Используется API CoinGecko:
+- https://api.coingecko.com/api/v3/
