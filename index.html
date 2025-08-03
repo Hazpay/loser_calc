@@ -103,17 +103,7 @@
   <div id="result">> Results will appear here...</div>
 
   <script>
-
-  // Telegram WebApp Access Control
-  if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-    document.body.innerHTML = `<div style="color:#f00;text-align:center;margin-top:50px;">
-      <h2>⚠ Access Denied</h2>
-      <p>This WebApp is only available inside Telegram.</p>
-    </div>`;
-    throw new Error("Blocked: Not accessed from Telegram");
-  }
-
-async function setMaxDate() {
+    async function setMaxDate() {
       try {
         const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
         const data = await res.json();
@@ -241,6 +231,5 @@ async function setMaxDate() {
       }
     }
   </script>
-<div style="margin-top:40px;font-size:12px;color:#0f0;">made by <a href="https://t.me/huzpay" target="_blank" style="color:#0ff;text-decoration:none;">@huzpay</a></div>
 </body>
 </html>
