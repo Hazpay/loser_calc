@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: btc-loss-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot/main.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: RENDER_URL
+        value: https://btc-loss-bot.onrender.com
